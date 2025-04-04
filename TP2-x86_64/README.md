@@ -1,5 +1,5 @@
 # Universidad de San Andrés
 
-## I301 Arquitectura de Computadoras y Sistemas Operativos
+## I304 Arquitectura de Computadoras y Sistemas Operativos
 
 
