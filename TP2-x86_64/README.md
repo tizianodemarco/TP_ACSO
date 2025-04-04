@@ -23,7 +23,7 @@ la cual está inicializada en 1 para probar la implementación en ensamblador. S
 
     #define USE_ASM_IMPL 0
     
-El archivo **main.c** es para que ustedes realicen sus propias pruebas. Siéntanse a gusto de manejarlo como crean conveniente. Para compilar el código y poder correr las pruebas cortas implementadas en main.
+El archivo **main.c** también lo pueden modificar y es para que ustedes realicen sus propias pruebas. Siéntanse a gusto de manejarlo como crean conveniente. Para compilar el código y poder correr las pruebas cortas implementadas en main.
 
 Compila:
 
