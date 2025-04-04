@@ -42,4 +42,5 @@ Para compilar el código y correr las pruebas intensivas, deberá ejecutar:
 
 En este punto se usa el archivo **salida.catedra.ej1.txt** para comparar la salida que produce su código con el de la cátedra. 
 
+## EJ2
 
