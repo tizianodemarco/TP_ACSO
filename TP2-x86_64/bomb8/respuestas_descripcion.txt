@@ -1,0 +1,17 @@
+--- FASE 1 ---
+Se desensamblo la fase 1, a lo que se detectó que la bomba esperaba un input
+especial alojado en cierta dirección de memoria (0x4c9a60)
+
+--- FASE 2 ---
+Desensamblando la función alojada en 0x4011c0 y la funcion misterio (0x401e0b), 
+se notó que el input debían ser 3 numeros enteros a, b y c, separados por espacios
+y que cumplan la condición ((a ^ b) >> 1 != c) y además, (c < 0)
+Una posible opción que fue la que se propuso, es: -2 1 -1
+
+--- FASE 3 ---
+Se descubrió que se esperan dos inputs: un número entero y un string, se llama a la
+función "cuenta" que lo que hace es una búsqueda binaria recursiva de la palabra input
+en un array de palabras (palabras.txt), sumando cada mid, es decir, el índice de cada
+iteración de la búsqueda binaria. El número resultante de esta operación es el que debe 
+coincidir con el número del input.
+

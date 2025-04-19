@@ -1,0 +1,15 @@
+Dump of assembler code for function phase_1:
+=> 0x0000000000401de7 <+0>:	endbr64 
+   0x0000000000401deb <+4>:	sub    rsp,0x8
+   0x0000000000401def <+8>:	lea    rsi,[rip+0xc7c6a]        # 0x4c9a60
+   0x0000000000401df6 <+15>:	call   0x402305 <strings_not_equal>
+   0x0000000000401dfb <+20>:	test   eax,eax
+   0x0000000000401dfd <+22>:	jne    0x401e04 <phase_1+29>
+   0x0000000000401dff <+24>:	add    rsp,0x8
+   0x0000000000401e03 <+28>:	ret    
+   0x0000000000401e04 <+29>:	call   0x40242e <explode_bomb>
+   0x0000000000401e09 <+34>:	jmp    0x401dff <phase_1+24>
+End of assembler dump.
+Warning: 'set logging off', an alias for the command 'set logging enabled', is deprecated.
+Use 'set logging enabled off'.
+
