@@ -9,11 +9,13 @@
 
       ./diskimageaccess ​<options>​ ​<diskimagePath>
 
-- Se puede comparar su salida contra la de la cátedra:
+- Se puede comparar su salida contra la de la cátedra (les proveemos un ejecutable solucion en **/samples**):
 
       ./samples/diskimageaccess_soln ​<options>​ ​<diskimagePath>
+  
+  (En caso de que no lo puedan ejecutar les proveemos la salida de este para que la prueben contra su salida)
 
-- diskimagePath: debe ser la ruta a uno de los discos de prueba ubicados en:
+- **diskimagePath**: debe ser la ruta a uno de los discos de prueba ubicados en:
 
        ./samples/testdisks. 
 
@@ -28,17 +30,12 @@ en el direcetorio **sample/testdisks**, hay tres discos de prueba: basicDiskImag
 
       ./diskimageaccess -ip ./samples/testdisks/basicDiskImage
   
-La salida esperada de ejecutar *diskimageaccess* en cada imagen de disco X se almacena en el archivo **X.gold** dentro del directorio testdisks.
-
-Esto genera un output en la salida estándar, ustedes la pueden redirigir a un archivo haciendo lo siguiente:
+La salida esperada de ejecutar *diskimageaccess* en cada imagen de disco X se almacena en el archivo **X.gold** dentro del directorio **/samples/testdisks** y tiene que coincidar con su salida. Esto genera un output en la salida estándar, ustedes la pueden redirigir a un archivo haciendo lo siguiente:
 
      ./diskimageaccess -ip /samples/testdisks/basicDiskImage > output_basic.txt
 
-
-En el caso de que no puedan puedan ejecutar **diskimageaccess_soln_x8**. Pueden comparar su salida con la de la cátedra con los archivos que tienen extensión **.gold** que se encuentran en **/samples/testdisks**. La idea es que la salida de ejecutar el comando:
+En el caso de que no puedan puedan ejecutar **diskimageaccess_soln_x8**. Pueden comparar su salida (**output_basic.txt**) con la de la cátedra que son los archivos que tienen extensión **.gold** que se encuentran en **/samples/testdisks**. La idea es que la salida de ejecutar el comando:
 
     diff output_basic.txt basicDiskImage.gold
 
 no encuentre ninguna diferencia entre esos archivos.
-
-
