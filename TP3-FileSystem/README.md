@@ -15,13 +15,13 @@
   
   (En caso de que no lo puedan ejecutar les proveemos la salida de este para que la prueben contra su salida)
 
-- **<diskimagePath>**: debe ser la ruta a uno de los discos de prueba ubicados en:
+- <**diskimagePath**>: debe ser la ruta a uno de los discos de prueba ubicados en:
 
        ./samples/testdisks. 
 
 en el direcetorio **sample/testdisks**, hay tres discos de prueba: basicDiskImage, depthFileDiskImage y dirFnameSizeDiskImage.
 
-- El ejecutable diskimageaccess reconoce validas solo dos **<options>**:
+- El ejecutable diskimageaccess reconoce validas solo dos <**options**>:
 
       i: prueba las capas de inode y archivo.
       p: prueba las capas de nombre de archivo y ruta.
