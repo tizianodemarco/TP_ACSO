@@ -7,34 +7,38 @@
 #include <string.h>
 #include <assert.h>
 
+#define ROOT_INUMBER 1      // Inodo correspondiente al directorio raíz
+#define DIR_NAME_LEN 14     // Longitud máxima del nombre de un directorio o archivo
+
 int pathname_lookup(struct unixfilesystem *fs, const char *pathname) {
     if (fs == NULL || pathname == NULL || pathname[0] != '/') {
-        return -1; // solo manejamos paths absolutos
+        return -1;  // Error en el pathname
     }
-
-    // Caso especial: root "/"
-    if (strcmp(pathname, "/") == 0) {
-        return 1; // inode del directorio raíz
+   if (strcmp(pathname, "/") == 0) {
+        return ROOT_INUMBER; // Si el pathname es solo "/" se devuelve el inodo raíz
     }
+    int current_inumber = ROOT_INUMBER;
+    const char *start = pathname + 1;
+    char component[DIR_NAME_LEN + 1];
 
-    // Copiamos pathname porque strtok lo modifica
-    char pathcopy[strlen(pathname) + 1];
-    strcpy(pathcopy, pathname);
-
-    // Empezamos desde el inode del root
-    int current_inumber = 1;
-
-    // strtok necesita saltar la barra inicial
-    char *token = strtok(pathcopy + 1, "/");
-
-    while (token != NULL) {
-        int next_inumber = directory_lookup(fs, current_inumber, token);
-        if (next_inumber < 0) {
-            return -1; // nombre no encontrado
+    while (*start != '\0') {
+        const char *end = strchr(start, '/');
+        if (end == NULL) {
+            end = start + strlen(start);    // Si no hay '/', tomamos hasta el final del string
         }
-        current_inumber = next_inumber;
-        token = strtok(NULL, "/");
-    }
+        size_t length = end - start;
+        if (length == 0 || length > DIR_NAME_LEN) {
+            return -1;  // Error por nombre vacío o demasiado largo
+        }
+        strncpy(component, start, length);
+        component[length] = '\0';
 
+        struct direntv6 entry;
+        if (directory_findname(fs, component, current_inumber, &entry) != 0) {
+            return -1;  // No se encontró el nombre
+        }
+        current_inumber = entry.d_inumber;
+        start = (*end == '/') ? end + 1 : end;
+    }
     return current_inumber;
 }
