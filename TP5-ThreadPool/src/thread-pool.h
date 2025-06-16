@@ -15,9 +15,13 @@
 #include <thread>      // for thread
 #include <vector>      // for vector
 #include "Semaphore.h" // for Semaphore
+#include <mutex>       // for mutex
+#include <queue>       // for queue
+#include <atomic>      // for atomic
+#include <functional> // for std::function
+#include <memory>      // for unique_ptr
 
 using namespace std;
-
 
 /**
  * @brief Represents a worker in the thread pool.
@@ -30,10 +34,14 @@ using namespace std;
  */
 typedef struct worker {
     thread ts;
-    function<void(void)> thunk;
+    // function<void(void)> thunk;
     /**
      * Complete the definition of the worker_t struct here...
      **/
+    Semaphore sem;                  // Semaphore to signal the worker to start
+    std::function<void(void)> job;
+    std::atomic<bool> available{true};
+
 } worker_t;
 
 class ThreadPool {
@@ -65,19 +73,29 @@ class ThreadPool {
   * over the course of its lifetime.
   */
     ~ThreadPool();
+
+    // privado 
+    // ThreadPool(const ThreadPool& original) = delete;
+    // ThreadPool& operator=(const ThreadPool& rhs) = delete;
     
   private:
 
-    void worker(int id);
+    void worker_loop(int id);
     void dispatcher();
-    thread dt;                              // dispatcher thread handle
-    vector<worker_t> wts;                   // worker thread handles. you may want to change/remove this
-    bool done;                              // flag to indicate the pool is being destroyed
-    mutex queueLock;                        // mutex to protect the queue of tasks
+    std::thread dt;                              // dispatcher thread handle
+    std::vector<std::unique_ptr<worker_t>> wts;                 // worker thread handles. you may want to change/remove this
+    std::queue<std::function<void(void)>> tasks; // queue of tasks to be executed
+    // bool done;                              // flag to indicate the pool is being destroyed
+    //mutex queueLock;                        // mutex to protect the queue of tasks
 
     /* It is incomplete, there should be more private variables to manage the structures... 
     * *
     */
+    std::mutex mtx;
+    Semaphore taskAvailable;
+    Semaphore allTasksDone;
+    std::atomic<size_t> remainingTasks{0};
+    std::atomic<bool> stopping{false};
   
     /* ThreadPools are the type of thing that shouldn't be cloneable, since it's
     * not clear what it means to clone a ThreadPool (should copies of all outstanding
@@ -89,4 +107,6 @@ class ThreadPool {
     ThreadPool(const ThreadPool& original) = delete;
     ThreadPool& operator=(const ThreadPool& rhs) = delete;
 };
+
 #endif
+
