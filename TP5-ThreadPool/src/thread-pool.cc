@@ -23,17 +23,29 @@ ThreadPool::ThreadPool(size_t numThreads) {
     // // Lanzar workers
     // for (size_t i = 0; i < numThreads; ++i) {
     //     wts[i].ts = std::thread([this, i] { worker(i); });
+    //     wts.emplace_back(std::make_unique<worker_t>()); // sin argumentos
     // }
+    wts.reserve(numThreads);
+
+    // inicializar todos los unique_ptr
     for (size_t i = 0; i < numThreads; ++i) {
         wts.emplace_back(std::make_unique<worker_t>()); // sin argumentos
+    }
+
+    // lanzar los workers 
+    for (size_t i = 0; i < numThreads; ++i) {
         wts[i]->ts = std::thread([this, i]{ worker_loop(i); });
     }
+
     // Lanzar dispatcher
     dt = std::thread([this] { dispatcher(); });
 }
 
 // Encola tareas y avisa al dispatcher
 void ThreadPool::schedule(const function<void(void)>& thunk) {
+    if (stopping) throw std::runtime_error("ThreadPool is stopping; can't schedule new tasks"); // evitar agregar tareas si se está deteniendo
+    if (!thunk) throw std::invalid_argument("Cannot schedule nullptr task"); // Validar que la tarea no sea nula
+
     {
         std::unique_lock<std::mutex> lock(mtx);
         this->tasks.push(thunk);
@@ -61,9 +73,17 @@ void ThreadPool::dispatcher() {
         // Buscar un worker disponible
         while (true) {
             for (auto& w : wts) {
-                if (w->available.exchange(false)) {  // Lo marco como ocupado
-                    w->job = task;
-                    w->sem.signal();  // Le digo al worker que arranque
+                // if (w->available.exchange(false)) {  // Lo marco como ocupado
+                //     w->job = task;
+                //     w->sem.signal();  // Le digo al worker que arranque
+                //     goto next_task;
+                // }
+                if (w->available.exchange(false)) {
+                    {
+                        std::lock_guard<std::mutex> lock(w->job_mtx);
+                        w->job = task;
+                    }
+                    w->sem.signal();  // Despertar worker
                     goto next_task;
                 }
             }
@@ -80,25 +100,44 @@ void ThreadPool::worker_loop(int id) {
 
         if (stopping) break;
 
-        if (wts[id]->job) {
-            wts[id]->job();  // Ejecutar tarea
+        std::function<void(void)> task_to_run;
+
+        {
+            std::lock_guard<std::mutex> lock(wts[id]->job_mtx);
+            task_to_run = wts[id]->job;
             wts[id]->job = nullptr;
+        }
 
-            remainingTasks--;
+        if (task_to_run) {
+            task_to_run();  // Ejecutar fuera del lock
+            {
 
-            if (remainingTasks == 0)
-                allTasksDone.signal();
+        // if (wts[id]->job) {
+        //     wts[id]->job();  // Ejecutar tarea
+        //     wts[id]->job = nullptr;
 
+        //     remainingTasks--;
+                std::lock_guard<std::mutex> lock(mtx_done);
+                if (--remainingTasks == 0){
+                    cv_done.notify_all();
+                }
+            }   
             wts[id]->available = true;  // Se libera
         }
     }
 }
 
 // Espera a que todas las tareas se completen
+// void ThreadPool::wait() {
+//     while (remainingTasks > 0) {
+//     allTasksDone.wait();  // Esperar a que se terminen
+//     }
+// }
+
 void ThreadPool::wait() {
-    while (remainingTasks > 0) {
-    allTasksDone.wait();  // Esperar a que se terminen
-    }
+    std::unique_lock<std::mutex> lock(mtx_done);
+    cv_done.wait(lock, [this]() { return remainingTasks == 0; });
+    // todos los que estan esperando por wait se desbloquean cuando terminan las tareas 
 }
 
 // Espera tareas, finaliza todos los hilos correctamente
@@ -106,10 +145,10 @@ ThreadPool::~ThreadPool() {
     wait();  // Esperar que terminen
 
     stopping = true;
-
+    
     // Despertar todos los hilos
     taskAvailable.signal();  // Para el dispatcher
-
+    
     dt.join();
 
     for (auto& w : wts) {

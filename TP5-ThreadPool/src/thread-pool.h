@@ -41,6 +41,7 @@ typedef struct worker {
     Semaphore sem;                  // Semaphore to signal the worker to start
     std::function<void(void)> job;
     std::atomic<bool> available{true};
+    std::mutex job_mtx; // para protejer el acceso a job
 
 } worker_t;
 
@@ -93,7 +94,10 @@ class ThreadPool {
     */
     std::mutex mtx;
     Semaphore taskAvailable;
-    Semaphore allTasksDone;
+    // Semaphore allTasksDone;
+    std::condition_variable cv_done;
+    std::mutex mtx_done;
+
     std::atomic<size_t> remainingTasks{0};
     std::atomic<bool> stopping{false};
   
