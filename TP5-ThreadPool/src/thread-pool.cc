@@ -1,129 +1,140 @@
-/**
- * File: thread-pool.cc
- * --------------------
- * Presents the implementation of the ThreadPool class.
- */
-
 #include "thread-pool.h"
 #include "Semaphore.h"
 
+#include <functional>
 #include <queue>
 #include <thread>
 #include <mutex>
-#include <vector>
 #include <condition_variable>
-#include <functional>
 #include <atomic>
 
 using namespace std;
 
 ThreadPool::ThreadPool(size_t numThreads) {
-    wts.reserve(numThreads);
-    // Inicializar todos los unique_ptr
+    wts.reserve(numThreads);  // reservamos lugar para los workers
+
+    // creamos los workers y los guardamos
     for (size_t i = 0; i < numThreads; ++i) {
-        wts.emplace_back(std::make_unique<worker_t>()); // sin argumentos
+        wts.emplace_back(std::unique_ptr<worker_t>(new worker_t()));
     }
-    // Lanzar los workers 
+
+    // arrancamos los hilos que corren el loop del worker
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i]->ts = std::thread([this, i]{ worker_loop(i); });
     }
-    // Lanzar dispatcher
+
+    // metemos todos los workers en la cola de disponibles
+    for (size_t i = 0; i < numThreads; ++i) {
+        {
+            std::lock_guard<std::mutex> lock(mtx_workers);
+            available_workers.push(wts[i].get());
+        }
+        workerAvailable.signal(); // avisamos que hay uno libre
+    }
+
+    // arrancamos el dispatcher en su propio hilo
     dt = std::thread([this] { dispatcher(); });
 }
 
-// Encola tareas y avisa al dispatcher
 void ThreadPool::schedule(const function<void(void)>& thunk) {
-    if (stopping) throw std::runtime_error("ThreadPool is stopping; can't schedule new tasks"); // evitar agregar tareas si se está deteniendo
-    if (!thunk) throw std::invalid_argument("Cannot schedule nullptr task"); // Validar que la tarea no sea nula
+    if (stopping) throw std::runtime_error("el threadpool se está apagando");
+    if (!thunk) throw std::invalid_argument("tarea vacía, no va");
+
     {
         std::unique_lock<std::mutex> lock(mtx);
-        this->tasks.push(thunk);
-        this->remainingTasks++;
+        tasks.push(thunk);     // metemos la tarea en la cola
+        remainingTasks++;      // subimos el contador
     }
-    taskAvailable.signal();  // Avisar al dispatcher
+
+    taskAvailable.signal();    // avisamos que hay tarea nueva
 }
 
-// Extrae tareas, busca un worker libre, le asigna la tarea y lo despierta
 void ThreadPool::dispatcher() {
     while (true) {
-        taskAvailable.wait();
+        taskAvailable.wait();    // esperamos que haya tareas
 
-        if (stopping) break;
+        if (stopping) break;     // si se apagó, salimos
 
         std::function<void(void)> task;
+
         {
             std::unique_lock<std::mutex> lock(mtx);
-            if (tasks.empty()) continue;
-
-            task = tasks.front();
-            tasks.pop();
+            if (tasks.empty()) continue;  // a veces no hay tareas, seguimos esperando
+            task = tasks.front();         // agarramos la primera
+            tasks.pop();                  // la sacamos
         }
 
-        // Buscar un worker disponible
-        while (true) {
-            for (auto& w : wts) {
-                if (w->available.exchange(false)) {
-                    {
-                        std::lock_guard<std::mutex> lock(w->job_mtx);
-                        w->job = task;
-                    }
-                    w->sem.signal();  // Despertar worker
-                    goto next_task;
-                }
+        workerAvailable.wait();  // esperamos que haya un worker libre
+
+        worker_t* free_worker = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(mtx_workers);
+            if (!available_workers.empty()) {
+                free_worker = available_workers.front();
+                available_workers.pop();
             }
-            std::this_thread::yield();  // Esperar activamente hasta que haya un worker
         }
-    next_task:;
+
+        if (!free_worker) continue; // seguridad extra por si falla algo
+
+        {
+            std::lock_guard<std::mutex> lock(free_worker->job_mtx);
+            free_worker->job = task;  // le asignamos la tarea al worker
+        }
+
+        free_worker->sem.signal();  // le decimos que arranque
     }
 }
 
-// Ejecuta una tarea y se marca como disponible nuevamente
 void ThreadPool::worker_loop(int id) {
     while (true) {
-        wts[id]->sem.wait();  // Esperar señal del dispatcher
+        wts[id]->sem.wait();  // espera a que lo despierten
 
-        if (stopping) break;
+        if (stopping) break;  // si cerramos, sale
 
         std::function<void(void)> task_to_run;
-
         {
             std::lock_guard<std::mutex> lock(wts[id]->job_mtx);
-            task_to_run = wts[id]->job;
-            wts[id]->job = nullptr;
+            task_to_run = wts[id]->job;  // agarramos la tarea
+            wts[id]->job = nullptr;      // la limpiamos
         }
 
         if (task_to_run) {
-            task_to_run();  // Ejecutar fuera del lock
+            task_to_run();  // la ejecutamos
+
             {
                 std::lock_guard<std::mutex> lock(mtx_done);
                 if (--remainingTasks == 0){
-                    cv_done.notify_all();
+                    cv_done.notify_all();  // si no quedan tareas, avisamos
                 }
-            }   
-            wts[id]->available = true;  // Se libera
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(mtx_workers);
+                available_workers.push(wts[id].get());  // lo devolvemos a la cola de libres
+            }
+            workerAvailable.signal(); // avisamos que hay un worker más libre
         }
     }
 }
 
 void ThreadPool::wait() {
     std::unique_lock<std::mutex> lock(mtx_done);
+    // esperamos hasta que no quede nada pendiente
     cv_done.wait(lock, [this]() { return remainingTasks == 0; });
-    // todos los que estan esperando por wait se desbloquean cuando terminan las tareas 
 }
 
-// Espera tareas, finaliza todos los hilos correctamente
 ThreadPool::~ThreadPool() {
-    wait();  // Esperar que terminen
+    wait();              // esperamos a que terminen todas
+    stopping = true;     // avisamos que se cierra
 
-    stopping = true;
-    
-    // Despertar todos los hilos
-    taskAvailable.signal();  // Para el dispatcher
-    
-    dt.join();
+    taskAvailable.signal();  // despertamos al dispatcher
 
+    dt.join();           // lo esperamos
+
+    // despertamos a los workers para que salgan y los esperamos
     for (auto& w : wts) {
-        w->sem.signal();  // Despertar a los workers por si están esperando
+        w->sem.signal(); // por si están dormidos esperando tareas
         if (w->ts.joinable())
             w->ts.join();
     }
