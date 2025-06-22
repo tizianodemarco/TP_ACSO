@@ -18,25 +18,15 @@
 using namespace std;
 
 ThreadPool::ThreadPool(size_t numThreads) {
-    // wts.resize(numThreads);
-
-    // // Lanzar workers
-    // for (size_t i = 0; i < numThreads; ++i) {
-    //     wts[i].ts = std::thread([this, i] { worker(i); });
-    //     wts.emplace_back(std::make_unique<worker_t>()); // sin argumentos
-    // }
     wts.reserve(numThreads);
-
-    // inicializar todos los unique_ptr
+    // Inicializar todos los unique_ptr
     for (size_t i = 0; i < numThreads; ++i) {
         wts.emplace_back(std::make_unique<worker_t>()); // sin argumentos
     }
-
-    // lanzar los workers 
+    // Lanzar los workers 
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i]->ts = std::thread([this, i]{ worker_loop(i); });
     }
-
     // Lanzar dispatcher
     dt = std::thread([this] { dispatcher(); });
 }
@@ -45,7 +35,6 @@ ThreadPool::ThreadPool(size_t numThreads) {
 void ThreadPool::schedule(const function<void(void)>& thunk) {
     if (stopping) throw std::runtime_error("ThreadPool is stopping; can't schedule new tasks"); // evitar agregar tareas si se está deteniendo
     if (!thunk) throw std::invalid_argument("Cannot schedule nullptr task"); // Validar que la tarea no sea nula
-
     {
         std::unique_lock<std::mutex> lock(mtx);
         this->tasks.push(thunk);
@@ -73,11 +62,6 @@ void ThreadPool::dispatcher() {
         // Buscar un worker disponible
         while (true) {
             for (auto& w : wts) {
-                // if (w->available.exchange(false)) {  // Lo marco como ocupado
-                //     w->job = task;
-                //     w->sem.signal();  // Le digo al worker que arranque
-                //     goto next_task;
-                // }
                 if (w->available.exchange(false)) {
                     {
                         std::lock_guard<std::mutex> lock(w->job_mtx);
@@ -111,12 +95,6 @@ void ThreadPool::worker_loop(int id) {
         if (task_to_run) {
             task_to_run();  // Ejecutar fuera del lock
             {
-
-        // if (wts[id]->job) {
-        //     wts[id]->job();  // Ejecutar tarea
-        //     wts[id]->job = nullptr;
-
-        //     remainingTasks--;
                 std::lock_guard<std::mutex> lock(mtx_done);
                 if (--remainingTasks == 0){
                     cv_done.notify_all();
@@ -126,13 +104,6 @@ void ThreadPool::worker_loop(int id) {
         }
     }
 }
-
-// Espera a que todas las tareas se completen
-// void ThreadPool::wait() {
-//     while (remainingTasks > 0) {
-//     allTasksDone.wait();  // Esperar a que se terminen
-//     }
-// }
 
 void ThreadPool::wait() {
     std::unique_lock<std::mutex> lock(mtx_done);

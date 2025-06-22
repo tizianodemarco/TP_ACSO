@@ -74,10 +74,6 @@ class ThreadPool {
   * over the course of its lifetime.
   */
     ~ThreadPool();
-
-    // privado 
-    // ThreadPool(const ThreadPool& original) = delete;
-    // ThreadPool& operator=(const ThreadPool& rhs) = delete;
     
   private:
 
@@ -86,15 +82,12 @@ class ThreadPool {
     std::thread dt;                              // dispatcher thread handle
     std::vector<std::unique_ptr<worker_t>> wts;                 // worker thread handles. you may want to change/remove this
     std::queue<std::function<void(void)>> tasks; // queue of tasks to be executed
-    // bool done;                              // flag to indicate the pool is being destroyed
-    //mutex queueLock;                        // mutex to protect the queue of tasks
 
     /* It is incomplete, there should be more private variables to manage the structures... 
     * *
     */
     std::mutex mtx;
     Semaphore taskAvailable;
-    // Semaphore allTasksDone;
     std::condition_variable cv_done;
     std::mutex mtx_done;
 
